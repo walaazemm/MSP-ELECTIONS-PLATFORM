@@ -1,0 +1,24 @@
+{% extends "base_dashboard.html" %}
+
+{% block dashboard_content %}
+<div class="max-w-2xl mx-auto">
+    <div class="glass-panel p-8 text-center">
+        <i class="fa-solid fa-triangle-exclamation text-5xl text-amber-400 mb-4"></i>
+        <h2 class="text-2xl font-bold text-white mb-4">تأكيد حذف المستخدم</h2>
+        <p class="text-[var(--text-muted)] mb-6 leading-relaxed">
+            هل أنت متأكد من حذف المستخدم "<strong>{{ user.full_name|default:user.email }}</strong>"؟<br>
+            سيتم حذف جميع البيانات المرتبطة به نهائياً. لا يمكن التراجع عن هذا الإجراء.
+        </p>
+        
+        <form method="post" class="flex gap-4 justify-center">
+            {% csrf_token %}
+            <button type="submit" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors">
+                نعم، احذف
+            </button>
+            <a href="{% url 'users:list' %}" class="px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-colors">
+                إلغاء
+            </a>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "base_dashboard.html" %}
+{% load humanize %}
+
+{% block dashboard_content %}
+<div class="space-y-6 max-w-7xl mx-auto">
+    
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">لوحة تحكم البلدية: {{ scope_name }}</h1>
+        <p class="text-[var(--text-muted)] mt-1 text-sm">
+            {% if active_election %}{{ active_election.name_fr }}{% else %}لا توجد انتخابات نشطة{% endif %}
+        </p>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass-panel p-4 text-center">
+            <p class="text-2xl font-bold text-white">{{ stats.registered_voters|intcomma }}</p>
+            <p class="text-xs text-[var(--text-muted)]">المسجلون</p>
+        </div>
+        <div class="glass-panel p-4 text-center">
+            <p class="text-2xl font-bold text-[var(--brand-terra)]">{{ stats.turnout_percent }}%</p>
+            <p class="text-xs text-[var(--text-muted)]">المشاركة</p>
+        </div>
+        <div class="glass-panel p-4 text-center border-[var(--brand-green)]/30">
+            <p class="text-2xl font-bold text-[var(--brand-green-glow)]">{{ stats.msp_votes|intcomma }}</p>
+            <p class="text-xs text-[var(--text-muted)]">أصوات الحركة</p>
+        </div>
+        <div class="glass-panel p-4 text-center">
+            <p class="text-2xl font-bold text-amber-400">{{ stats.completion_percent }}%</p>
+            <p class="text-xs text-[var(--text-muted)]">إنجاز التصريح</p>
+        </div>
+    </div>
+
+    <!-- 🏛️ COMMUNE PV ACTION CARD -->
+    <div class="glass-panel p-8 mt-6 border border-[var(--brand-green)]/30 bg-[var(--brand-green)]/5 text-center">
+        <div class="w-20 h-20 bg-[var(--brand-green)]/20 text-[var(--brand-green-glow)] rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-[var(--brand-green)]/40">
+            <i class="fa-solid fa-file-signature text-4xl"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-white mb-2">محضر البلدية الإجمالي</h2>
+        <p class="text-[var(--text-muted)] mb-6 max-w-md mx-auto">
+            بصفتك ممثل البلدية، يمكنك إدخال النتائج الإجمالية لكامل بلدية {{ commune.name_ar }} من هنا.
+        </p>
+        
+        {% if commune_pv %}
+            {% if commune_pv.has_result %}
+                <!-- If already filled, show status and edit button -->
+                <div class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/30 mb-4">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span class="font-bold">تم إدخال المحضر بنجاح</span>
+                </div>
+                <br>
+                <a href="{% url 'elections:enter_results' commune_pv.id %}" class="btn-primary inline-flex items-center gap-2 px-8 py-3 text-lg">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    <span>تعديل المحضر</span>
+                </a>
+            {% else %}
+                <!-- If not filled, show primary action -->
+                <a href="{% url 'elections:enter_results' commune_pv.id %}" class="btn-primary inline-flex items-center gap-2 px-8 py-4 text-lg shadow-lg shadow-[var(--brand-green)]/20 hover:scale-105 transition-transform">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>إدخال محضر البلدية</span>
+                </a>
+            {% endif %}
+        {% else %}
+            <p class="text-red-400 font-medium">⚠️ لم يتم تهيئة محضر البلدية. يرجى التواصل مع المسؤول الوطني.</p>
+        {% endif %}
+    </div>
+
+    <!-- Optional: Link to manage individual centers if they ever need to see them -->
+    <div class="text-center mt-4">
+        <a href="{% url 'elections:bureau_list' %}" class="text-sm text-[var(--text-muted)] hover:text-white transition-colors underline">
+            عرض وإدارة المحاضر التفصيلية (للمسؤولين)
+        </a>
+    </div>
+
+</div>
+{% endblock %}

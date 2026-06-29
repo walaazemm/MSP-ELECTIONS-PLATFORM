@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="min-h-screen flex items-center justify-center p-6">
+    <div class="glass-panel p-8 max-w-md text-center">
+        <i class="fa-solid fa-user-shield text-5xl text-[var(--brand-terra)] mb-4"></i>
+        <h1 class="text-2xl font-bold text-white mb-3">صلاحية غير معرّفة</h1>
+        <p class="text-[var(--text-muted)] mb-6 leading-relaxed">
+            حسابك موجود، لكن لم يتم تعيين دور (وطني / ولاية / بلدية) له بعد.<br>
+            يرجى التواصل مع المسؤول الوطني لتفعيل صلاحيتك.
+        </p>
+        <form action="{% url 'logout' %}" method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn-primary w-full justify-center">
+                <span>تسجيل الخروج</span>
+                <i class="fa-solid fa-right-from-bracket"></i>
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

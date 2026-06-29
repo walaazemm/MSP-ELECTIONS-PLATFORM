@@ -1,0 +1,86 @@
+{% extends "base_dashboard.html" %}
+
+{% block dashboard_content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">تعديل مركز: {{ bureau.code }}</h1>
+        <p class="text-[var(--text-muted)] mt-1 text-sm">{{ bureau.commune.name_fr }} - {{ bureau.commune.wilaya.name_fr }} | {{ bureau.election.name_fr }}</p>
+    </div>
+
+    <!-- Messages -->
+    {% if messages %}
+        <div class="space-y-3">
+            {% for message in messages %}
+                <div class="glass-panel p-4 {% if message.tags == 'error' %}border-red-500/30{% elif message.tags == 'warning' %}border-amber-500/30{% else %}border-[var(--brand-green)]/30{% endif %} flex items-start gap-3">
+                    <i class="fa-solid {% if message.tags == 'error' %}fa-circle-exclamation text-red-400{% elif message.tags == 'warning' %}fa-triangle-exclamation text-amber-400{% else %}fa-circle-check text-[var(--brand-green-glow)]{% endif %} mt-1"></i>
+                    <span class="text-sm font-medium text-white">{{ message }}</span>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <!-- Edit Form -->
+    <div class="glass-panel p-6 sm:p-8">
+        <form method="post" action="{% url 'elections:edit_bureau' bureau.id %}" class="space-y-6">
+            {% csrf_token %}
+            
+            <!-- Election (Read-only) -->
+            <div>
+                <label class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">الانتخاب</label>
+                <input type="text" value="{{ bureau.election.name_fr }}" disabled class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-[var(--text-muted)] cursor-not-allowed">
+            </div>
+
+            <!-- Commune (Editable, Required) -->
+            <div>
+                <label for="commune" class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">البلدية <span class="text-red-400">*</span></label>
+                <select name="commune" id="commune" required class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[var(--brand-green)] focus:border-transparent text-white outline-none transition-all [&>option]:text-gray-900 [&>option]:bg-white">
+                    <option value="">-- اختر البلدية --</option>
+                    {% for commune in communes %}
+                        <option value="{{ commune.id }}" {% if commune.id == bureau.commune.id %}selected{% endif %}>
+                            {{ commune.name_fr }} - {{ commune.wilaya.name_fr }}
+                        </option>
+                    {% endfor %}
+                </select>
+                {% if role == 'commune' %}
+                    <p class="text-xs text-[var(--text-muted)] mt-1 me-1">لا يمكن تغيير البلدية لصلاحياتك</p>
+                {% endif %}
+            </div>
+
+            <!-- Bureau Code (Editable, Required) -->
+            <div>
+                <label for="code" class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">رمز المحضر <span class="text-red-400">*</span></label>
+                <input type="text" name="code" id="code" value="{{ bureau.code }}" required placeholder="مثال: 001"
+                       class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[var(--brand-green)] focus:border-transparent text-white placeholder-[var(--text-muted)]/50 outline-none transition-all">
+            </div>
+
+            <!-- Optional Fields -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                    <label for="name" class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">اسم المحضر <span class="text-xs text-[var(--brand-terra)]">(اختياري)</span></label>
+                    <input type="text" name="name" id="name" value="{{ bureau.name|default:'' }}" placeholder="مثال: مدرسة أحمد زبانة"
+                           class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[var(--brand-green)] focus:border-transparent text-white placeholder-[var(--text-muted)]/50 outline-none transition-all">
+                </div>
+
+                <div>
+                    <label for="registered_voters" class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">عدد المسجلين <span class="text-xs text-[var(--brand-terra)]">(اختياري)</span></label>
+                    <input type="number" name="registered_voters" id="registered_voters" value="{{ bureau.registered_voters|default:'' }}" placeholder="مثال: 342"
+                           class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[var(--brand-green)] focus:border-transparent text-white placeholder-[var(--text-muted)]/50 outline-none transition-all">
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex gap-4 pt-4">
+                <button type="submit" class="btn-primary flex-1 justify-center py-4 text-base">
+                    <span>تحديث المركز</span>
+                    <i class="fa-solid fa-check"></i>
+                </button>
+                <a href="{% url 'elections:bureau_list' %}" class="px-6 py-4 text-center rounded-xl border border-white/10 text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition-colors">
+                    إلغاء
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="min-h-screen flex bg-navy-900" x-data="{ sidebarOpen: false }">
+    
+    <!-- Mobile Overlay Backdrop -->
+    <div x-show="sidebarOpen" 
+         @click="sidebarOpen = false" 
+         x-transition.opacity
+         class="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm lg:hidden">
+    </div>
+<!-- Sidebar (RTL-Native: Anchored to right-0) -->
+<aside 
+    class="fixed inset-y-0 right-0 z-40 w-72 glass-panel border-s border-white/10 flex flex-col overflow-hidden transition-transform duration-300 ease-out
+           translate-x-full
+           lg:static lg:z-auto lg:translate-x-0 lg:ms-4 lg:my-4 lg:rounded-2xl"
+    :class="sidebarOpen ? '!translate-x-0' : ''"
+>
+    <!-- Logo Area -->
+    <div class="h-20 flex items-center justify-center border-b border-white/5 px-6 relative shrink-0">
+        <img src="https://res.cloudinary.com/du2obowro/image/upload/v1776168165/logo_knazdg.png" 
+             alt="حركة مجتمع السلم" 
+             class="h-12 w-auto object-contain drop-shadow-[0_0_15px_rgba(0,230,118,0.2)]">
+        
+        <!-- Mobile Close Button -->
+        <button @click="sidebarOpen = false" class="lg:hidden absolute start-4 top-1/2 -translate-y-1/2 text-white/60 hover:text-white transition-colors">
+            <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+    </div>
+
+    <!-- Navigation Links -->
+    <nav class="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+        <a href="/" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all border border-transparent {% if active_page|default:'' == 'dashboard' %}bg-[var(--brand-green)] text-white shadow-lg shadow-[var(--brand-green)]/20{% else %}text-[var(--text-muted)] hover:bg-white/5 hover:text-white{% endif %}">
+            <i class="fa-solid fa-house w-5 text-center"></i>
+            <span>لوحة التحكم</span>
+        </a>
+        
+        <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all border border-transparent {% if active_page|default:'' == 'elections' %}bg-[var(--brand-green)] text-white shadow-lg shadow-[var(--brand-green)]/20{% else %}text-[var(--text-muted)] hover:bg-white/5 hover:text-white{% endif %}">
+            <i class="fa-solid fa-calendar-check w-5 text-center"></i>
+            <span>الانتخابات</span>
+        </a>
+        
+        <a href="{% url 'users:list' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all border border-transparent {% if active_page|default:'' == 'users' %}bg-[var(--brand-green)] text-white shadow-lg shadow-[var(--brand-green)]/20{% else %}text-[var(--text-muted)] hover:bg-white/5 hover:text-white{% endif %}">
+            <i class="fa-solid fa-users w-5 text-center"></i>
+            <span>إدارة المستخدمين</span>
+        </a>
+        
+        <!-- Bureau List Link -->
+        <a href="{% url 'elections:bureau_list' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all border border-transparent {% if active_page|default:'' == 'bureaux' %}bg-[var(--brand-green)] text-white shadow-lg shadow-[var(--brand-green)]/20{% else %}text-[var(--text-muted)] hover:bg-white/5 hover:text-white{% endif %}">
+            <i class="fa-solid fa-list-check w-5 text-center"></i>
+            <span>قائمة المحاضر</span>
+        </a>
+
+        <!-- Add Bureau Link (Hidden for Commune Users) -->
+        {% with user_role=request.user.role_profile.role %}
+            {% if user_role != 'commune' %}
+                <a href="{% url 'elections:create_bureau' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all border border-transparent {% if active_page|default:'' == 'create' %}bg-[var(--brand-green)] text-white shadow-lg shadow-[var(--brand-green)]/20{% else %}text-[var(--text-muted)] hover:bg-white/5 hover:text-white{% endif %}">
+                    <i class="fa-solid fa-plus w-5 text-center"></i>
+                    <span>إضافة محضر بلدية</span>
+                </a>
+            {% endif %}
+        {% endwith %}
+    </nav>
+    <!-- 🛡️ Audit Log Link (Only visible to National & Super Admins) -->
+    {% with user_role=request.user.role_profile.role %}
+        {% if user_role == 'national' or user_role == 'super_admin' %}
+            <a href="{% url 'elections:audit_log' %}" 
+            class="{% if active_page == 'audit_log' %}bg-red-500/20 text-red-400 border border-red-500/30{% else %}text-[var(--text-muted)] hover:text-white hover:bg-white/5{% endif %} flex items-center gap-3 px-4 py-3 rounded-xl transition-colors">
+                <i class="fa-solid fa-shield-halved w-5 text-center"></i>
+                <span class="font-medium">سجل التدقيق</span>
+                <span class="mr-auto text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30">Admin</span>
+            </a>
+        {% endif %}
+    {% endwith %}
+    </nav>
+
+    <!-- User Profile Footer -->
+    <div class="p-4 border-t border-white/5 bg-black/20 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-[var(--brand-terra)] text-white flex items-center justify-center font-bold text-lg shadow-md shrink-0">
+                {{ request.user.full_name|slice:":1"|default:"م" }}
+            </div>
+           <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold text-white truncate">{{ request.user.full_name|default:"مستخدم" }}</p>
+                <p class="text-xs text-[var(--brand-terra)] uppercase tracking-wider">
+                    {% if request.user.role_profile.role == 'super_admin' %}مطور النظام
+                    {% elif request.user.role_profile.role == 'national' %}مسؤول وطني
+                    {% elif request.user.role_profile.role == 'wilaya' %}ممثل ولاية
+                    {% elif request.user.role_profile.role == 'commune' %}ممثل بلدية
+                    {% else %}غير محدد{% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+</aside>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden p-4 ps-0 lg:p-4">
+        
+        <!-- Top Header -->
+        <header class="glass-panel h-16 mb-4 flex items-center justify-between px-6 z-20 shrink-0">
+            <div class="flex items-center gap-4">
+                <!-- Mobile Hamburger -->
+                <button @click="sidebarOpen = true" class="lg:hidden text-white/80 hover:text-white p-2 rounded-lg hover:bg-white/5 transition-colors">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+                
+                <h2 class="text-lg font-semibold text-white hidden sm:block">غرفة عمليات الانتخابات</h2>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <!-- Live Status Chip -->
+                <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[var(--brand-green)]/10 border border-[var(--brand-green)]/30 rounded-full">
+                    <span class="w-2 h-2 bg-[var(--brand-green-glow)] rounded-full animate-pulse shadow-[0_0_10px_var(--brand-green-glow)]"></span>
+                    <span class="text-xs font-medium text-[var(--brand-green-glow)]">مباشر</span>
+                </div>
+
+                <!-- Logout Button -->
+                <form action="{% url 'logout' %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="w-10 h-10 flex items-center justify-center text-white/80 hover:text-red-400 hover:bg-white/5 rounded-xl transition-all border border-white/5" title="تسجيل الخروج">
+                        <!-- rtl-flip mirrors the arrow for Arabic -->
+                        <i class="fa-solid fa-right-from-bracket text-lg rtl-flip"></i>
+                    </button>
+                </form>
+            </div>
+        </header>
+
+        <!-- Page Content Injection -->
+        <main class="flex-1 overflow-y-auto">
+            {% block dashboard_content %}{% endblock %}
+        </main>
+    </div>
+</div>
+<!-- Global Toast Notification System -->
+<div id="toast-container" class="fixed top-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-3 pointer-events-none w-full max-w-md px-4">
+    {% if messages %}
+        {% for message in messages %}
+            <div class="toast-item pointer-events-auto flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl backdrop-blur-xl border animate-slide-down
+                {% if message.tags == 'success' %}bg-[var(--brand-green)]/95 border-[var(--brand-green-glow)]/50 text-white
+                {% elif message.tags == 'error' or message.tags == 'danger' %}bg-red-600/95 border-red-400/50 text-white
+                {% elif message.tags == 'warning' %}bg-amber-500/95 border-amber-300/50 text-white
+                {% else %}bg-blue-600/95 border-blue-400/50 text-white{% endif %}">
+                
+                <i class="fa-solid 
+                    {% if message.tags == 'success' %}fa-circle-check
+                    {% elif message.tags == 'error' or message.tags == 'danger' %}fa-circle-exclamation
+                    {% elif message.tags == 'warning' %}fa-triangle-exclamation
+                    {% else %}fa-circle-info{% endif %} text-xl"></i>
+                    
+                <span class="font-medium text-sm flex-1">{{ message }}</span>
+                
+                <button onclick="this.parentElement.classList.add('toast-exit'); setTimeout(() => this.parentElement.remove(), 300);" class="text-white/70 hover:text-white transition-colors p-1">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        {% endfor %}
+    {% endif %}
+</div>
+
+<style>
+@keyframes slide-down {
+    0% { transform: translateY(-150%); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-down {
+    animation: slide-down 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.toast-exit {
+    animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes slide-up {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-150%); opacity: 0; }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const toasts = document.querySelectorAll('.toast-item');
+    toasts.forEach(toast => {
+        // Auto-dismiss after 4 seconds
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.classList.add('toast-exit');
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, 4000);
+    });
+});
+</script>
+{% endblock %}

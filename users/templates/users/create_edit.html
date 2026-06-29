@@ -1,0 +1,166 @@
+{% extends "base_dashboard.html" %}
+
+{% block dashboard_content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+            {% if form_type == 'create' %}إضافة مستخدم جديد{% else %}تعديل بيانات: {{ user.full_name }}{% endif %}
+        </h1>
+        <p class="text-[var(--text-muted)] mt-1 text-sm">قم بتعيين الدور والنطاق الجغرافي بدقة</p>
+    </div>
+
+    <!-- Note: Static messages block removed because the Global Toast system handles it automatically! -->
+
+    <div class="glass-panel p-6 sm:p-8" x-data="{ 
+        role: '{% if current_role == 'wilaya' %}commune{% else %}{{ role_profile.role|default:'' }}{% endif %}' 
+    }">
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+            
+            <!-- Email & Full Name -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                    <label class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">البريد الإلكتروني <span class="text-red-400">*</span></label>
+                    <input type="email" name="email" value="{% if form_type == 'edit' and user %}{{ user.email }}{% endif %}" required
+                           class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:ring-2 focus:ring-[var(--brand-green)]">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">الاسم الكامل <span class="text-red-400">*</span></label>
+                    <input type="text" name="full_name" value="{% if form_type == 'edit' and user %}{{ user.full_name }}{% endif %}" required
+                           class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:ring-2 focus:ring-[var(--brand-green)]">
+                </div>
+            </div>
+
+            <!-- Password -->
+            <div>
+                <label class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">
+                    {% if form_type == 'create' %}كلمة المرور <span class="text-red-400">*</span>{% else %}كلمة المرور الجديدة <span class="text-xs text-[var(--brand-terra)]">(اتركها فارغة إذا لم ترد تغييرها)</span>{% endif %}
+                </label>
+                <input type="password" name="password" {% if form_type == 'create' %}required{% endif %}
+                       class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:ring-2 focus:ring-[var(--brand-green)]">
+            </div>
+
+            <!-- Role Selector -->
+            <div>
+                <label class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">الدور <span class="text-red-400">*</span></label>
+                {% if current_role == 'wilaya' %}
+                    <!-- Locked UI for Wilaya Admins -->
+                    <input type="text" value="ممثل بلدية" disabled class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-[var(--text-muted)] cursor-not-allowed">
+                    <input type="hidden" name="role" value="commune"> <!--  CRITICAL: Submits the role since the text input is disabled -->
+                    <p class="text-xs text-[var(--brand-terra)] mt-1 me-1">محدد تلقائياً: يمكنك فقط إضافة ممثلي البلديات.</p>
+                {% else %}
+                    <!-- Normal Dropdown for National/Super Admin -->
+                    <select name="role" x-model="role" required class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:ring-2 focus:ring-[var(--brand-green)] [&>option]:text-gray-900 [&>option]:bg-white">
+                        <option value="">اختر الدور...</option>
+                        {% for val, label in allowed_roles %}
+                            <option value="{{ val }}" {% if role_profile.role == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                {% endif %}
+            </div>
+
+            <!-- Wilaya Selector -->
+            <div x-show="role === 'wilaya' || role === 'commune'" x-transition>
+                <label class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">الولاية <span class="text-red-400">*</span></label>
+                {% if current_role == 'wilaya' %}
+                    <!-- Locked for Wilaya Admins -->
+                    <input type="text" value="{{ wilayas.0.code }} - {{ wilayas.0.name_fr }}" disabled class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-[var(--text-muted)] cursor-not-allowed">
+                    <input type="hidden" name="wilaya_id" id="wilaya_id" value="{{ wilayas.0.id }}">
+                {% else %}
+                    <!-- Normal Dropdown -->
+                    <select name="wilaya_id" id="wilaya_id" class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:ring-2 focus:ring-[var(--brand-green)] [&>option]:text-gray-900 [&>option]:bg-white">
+                        <option value="">اختر الولاية...</option>
+                        {% for w in wilayas %}
+                            <option value="{{ w.id }}" {% if role_profile.wilaya_id == w.id|stringformat:"d" %}selected{% endif %}>{{ w.code }} - {{ w.name_fr }}</option>
+                        {% endfor %}
+                    </select>
+                {% endif %}
+            </div>
+
+            <!-- Commune Selector (Dynamic) -->
+            <div x-show="role === 'commune'" x-transition>
+                <label class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">البلدية <span class="text-red-400">*</span></label>
+                <select name="commune_id" id="commune_id" class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:ring-2 focus:ring-[var(--brand-green)] [&>option]:text-gray-900 [&>option]:bg-white">
+                    <option value="">اختر الولاية أولاً...</option>
+                </select>
+            </div>
+
+            <!-- Active Status -->
+            <div class="flex items-center gap-3 pt-2">
+                <input type="checkbox" name="is_active" id="is_active" {% if user.is_active|default_if_none:True %}checked{% endif %} class="w-5 h-5 rounded text-[var(--brand-green)] focus:ring-[var(--brand-green)] bg-white/5 border-white/10">
+                <label for="is_active" class="text-sm font-medium text-[var(--text-muted)]">حساب نشط (يمكنه تسجيل الدخول)</label>
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex gap-4 pt-4">
+                <button type="submit" class="btn-primary flex-1 justify-center py-4 text-base">
+                    <span>{% if form_type == 'create' %}إنشاء المستخدم{% else %}حفظ التغييرات{% endif %}</span>
+                    <i class="fa-solid {% if form_type == 'create' %}fa-user-plus{% else %}fa-check{% endif %}"></i>
+                </button>
+                <a href="{% url 'users:list' %}" class="px-6 py-4 text-center rounded-xl border border-white/10 text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition-colors">
+                    إلغاء
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const wilayaInput = document.getElementById('wilaya_id');
+    const communeSelect = document.getElementById('commune_id');
+    const currentCommuneId = '{{ role_profile.commune_id|default:"" }}';
+
+    // If the user role is not allowed to see communes, exit
+    if (!communeSelect) return;
+
+    function loadCommunes(wilayaId, preselectId = null) {
+        if (!wilayaId) {
+            communeSelect.innerHTML = '<option value="">اختر الولاية أولاً...</option>';
+            return;
+        }
+        
+        communeSelect.innerHTML = '<option value="">جاري تحميل البلديات...</option>';
+        
+        // Fetch from our API endpoint
+        fetch(`/users/api/communes/${wilayaId}/`)
+            .then(response => response.json())
+            .then(data => {
+                communeSelect.innerHTML = '<option value="">اختر البلدية...</option>';
+                data.forEach(c => {
+                    const option = document.createElement('option');
+                    option.value = c.id;
+                    option.textContent = c.name_fr + (c.name_ar && c.name_ar !== c.name_fr ? ` - ${c.name_ar}` : '');
+                    
+                    // Auto-select if we are editing an existing user
+                    if (preselectId && c.id == preselectId) {
+                        option.selected = true;
+                    }
+                    communeSelect.appendChild(option);
+                });
+            })
+            .catch(err => {
+                console.error('Error fetching communes:', err);
+                communeSelect.innerHTML = '<option value="">خطأ في التحميل</option>';
+            });
+    }
+
+    //  Smart Initialization based on HTML Tag
+    if (wilayaInput.tagName === 'SELECT') {
+        // National Admin: It's a dropdown. Listen for changes.
+        wilayaInput.addEventListener('change', function() {
+            loadCommunes(this.value);
+        });
+        
+        // If editing an existing user, load communes on page load
+        if (currentCommuneId && wilayaInput.value) {
+            loadCommunes(wilayaInput.value, currentCommuneId);
+        }
+    } 
+    else if (wilayaInput.tagName === 'INPUT' && wilayaInput.type === 'hidden') {
+        //  Wilaya Admin: It's a hidden input. Load their specific communes IMMEDIATELY on page load!
+        loadCommunes(wilayaInput.value, currentCommuneId);
+    }
+});
+</script>
+{% endblock %}

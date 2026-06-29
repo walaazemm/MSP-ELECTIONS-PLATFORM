@@ -1,0 +1,154 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}منصة الانتخابات - حركة مجتمع السلم{% endblock %}</title>
+    
+    <!-- Font Awesome 6 (Icons) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Custom Font: TheYearofHandicrafts -->
+    <style>
+        @font-face {
+            font-family: 'TheYearofHandicrafts';
+            src: url('https://res.cloudinary.com/du2obowro/raw/upload/v1776168580/ArbFONTS-TheYearofHandicrafts-Regular_abgivr.otf') format('opentype');
+            font-weight: normal; font-style: normal; font-display: swap;
+        }
+        @font-face {
+            font-family: 'TheYearofHandicrafts';
+            src: url('https://res.cloudinary.com/du2obowro/raw/upload/v1776168581/ArbFONTS-TheYearofHandicrafts-Bold_k8xso3.otf') format('opentype');
+            font-weight: bold; font-style: normal; font-display: swap;
+        }
+    </style>
+
+    <!-- Tailwind CSS -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: {
+                            900: '#0B132B',
+                            800: '#1C2946',
+                            700: '#2D3E5A',
+                        },
+                        msp: {
+                            green: '#008A5E',
+                            greenGlow: '#00E676',
+                            terra: '#E07A5F',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['TheYearofHandicrafts', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Alpine.js for UI state (sidebar toggles, x-data, etc.) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Global CSS (RTL Optimized) -->
+    <style>
+        :root {
+            --bg-navy: #0B132B;
+            --panel-bg: rgba(28, 41, 70, 0.75);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-main: #F8F9FA;
+            --text-muted: #94A3B8;
+            --brand-green: #008A5E;
+            --brand-green-glow: #00E676;
+            --brand-terra: #E07A5F;
+        }
+
+        * { 
+    margin: 0; padding: 0; box-sizing: border-box; 
+        }
+body, input, textarea, select, button, a, p, h1, h2, h3, h4, h5, h6, label, span:not([class*="fa-"]):not([class*="bi-"]) {
+    font-family: 'TheYearofHandicrafts', system-ui, sans-serif;
+}
+        /*  Preserve Font Awesome's internal font mapping */
+i, .fa-solid, .fa-regular, .fa-brands {
+    font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", sans-serif !important;
+}
+        body { 
+            background-color: var(--bg-navy); 
+            color: var(--text-main); 
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 20%, rgba(0, 138, 94, 0.06), transparent 40%),
+                radial-gradient(circle at 85% 80%, rgba(224, 122, 95, 0.04), transparent 40%);
+            background-attachment: fixed;
+        }
+
+        /* Glassmorphism Panel */
+        .glass-panel {
+            background: var(--panel-bg); 
+            backdrop-filter: blur(20px); 
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color); 
+            border-radius: 20px;
+            box-shadow: 0 10px 30px 0 rgba(0, 0, 0, 0.4); 
+            transition: all 0.3s ease;
+        }
+        .glass-panel:hover {
+            border-color: rgba(0, 230, 118, 0.3);
+            box-shadow: 0 15px 40px 0 rgba(0, 138, 94, 0.15);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-navy); }
+        ::-webkit-scrollbar-thumb { background: var(--brand-green); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--brand-green-glow); }
+
+        /* Primary Button */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--brand-green), #00b377); 
+            color: white; 
+            padding: 12px 28px; 
+            border-radius: 12px; 
+            font-weight: bold;
+            box-shadow: 0 8px 20px rgba(0, 138, 94, 0.4); 
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-primary:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 12px 30px rgba(0, 230, 118, 0.5); 
+        }
+        .btn-primary:active { transform: translateY(0); }
+
+        /* Fix Chrome Autofill on Dark Mode */
+        input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus,
+        select:-webkit-autofill {
+            -webkit-text-fill-color: white !important;
+            -webkit-box-shadow: 0 0 0px 1000px rgba(28, 41, 70, 0.95) inset !important;
+            transition: background-color 5000s ease-in-out 0s !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+        }
+
+        /* Fix Select Dropdown Visibility */
+        select option {
+            background-color: white !important;
+            color: #1a1a2e !important;
+            font-family: 'TheYearofHandicrafts', sans-serif !important;
+        }
+
+        [x-cloak] {
+            display: none !important;
+        }
+    </style>
+    
+    {% block head_extra %}{% endblock %}
+</head>
+<body class="min-h-screen">
+    {% block body %}{% endblock %}
+</body>
+</html>

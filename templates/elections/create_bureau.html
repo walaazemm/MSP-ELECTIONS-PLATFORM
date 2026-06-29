@@ -1,0 +1,183 @@
+{% extends "base_dashboard.html" %}
+
+{% block dashboard_content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">إضافة محضر بلدية تصويت جديد</h1>
+        <p class="text-[var(--text-muted)] mt-1 text-sm">يمكنك إضافة المحاضر حسب صلاحياتك المكانية</p>
+    </div>
+
+    <!-- Messages -->
+    {% if messages %}
+        <div class="space-y-3">
+            {% for message in messages %}
+                {% if message.tags == 'success' %}
+                    <div class="glass-panel p-4 border-[var(--brand-green)]/30 flex items-start gap-3">
+                        <i class="fa-solid fa-circle-check text-[var(--brand-green-glow)] mt-1"></i>
+                        <span class="text-sm font-medium text-white">{{ message }}</span>
+                    </div>
+                {% elif message.tags == 'error' %}
+                    <div class="glass-panel p-4 border-red-500/30 flex items-start gap-3">
+                        <i class="fa-solid fa-circle-exclamation text-red-400 mt-1"></i>
+                        <span class="text-sm font-medium text-white">{{ message }}</span>
+                    </div>
+                {% else %}
+                    <div class="glass-panel p-4 border-amber-500/30 flex items-start gap-3">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-400 mt-1"></i>
+                        <span class="text-sm font-medium text-white">{{ message }}</span>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <!-- Creation Form -->
+    <div class="glass-panel p-6 sm:p-8">
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+            
+            <!-- Election & Commune Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                    <label class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">الانتخاب <span class="text-red-400">*</span></label>
+                    <select name="election" required class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[var(--brand-green)] focus:border-transparent text-white outline-none transition-all [&>option]:text-gray-900 [&>option]:bg-white">
+                        <option value="">-- اختر الانتخاب --</option>
+                        {% for election in elections %}
+                            <option value="{{ election.id }}">{{ election.name_fr }} ({{ election.get_type_display }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Wilaya Selector -->
+                <div>
+                    <label class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">الولاية <span class="text-red-400">*</span></label>
+                    {% if role == 'national' or role == 'super_admin' %}
+                        <!-- National Admins get a dropdown -->
+                        <select name="wilaya_id" id="wilaya_id" class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:ring-2 focus:ring-[var(--brand-green)] [&>option]:text-gray-900 [&>option]:bg-white">
+                            <option value="">اختر الولاية...</option>
+                            {% for w in wilayas %}
+                                <option value="{{ w.id }}">{{ w.code }} - {{ w.name_fr }}</option>
+                            {% endfor %}
+                        </select>
+                    {% else %}
+                        <!-- Wilaya/Commune Admins get a locked text field -->
+                        <input type="text" value="{{ wilayas.0.code }} - {{ wilayas.0.name_fr }}" disabled class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-[var(--text-muted)] cursor-not-allowed">
+                        <input type="hidden" name="wilaya_id" id="wilaya_id" value="{{ wilayas.0.id }}">
+                    {% endif %}
+                </div>
+
+                <!-- Commune Selector -->
+                <div>
+                    <label class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">البلدية <span class="text-red-400">*</span></label>
+                    {% if role == 'commune' %}
+                        <!-- Display only for Commune users -->
+                        <input type="text" value="{{ role_obj.commune.name_fr }} ({{ role_obj.commune.wilaya.name_fr }})" disabled 
+                            class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-[var(--text-muted)] cursor-not-allowed">
+                        <!-- 🔒 CRITICAL: Hidden input to actually submit the ID in the POST request -->
+                        <input type="hidden" name="commune" value="{{ role_obj.commune.id }}">
+                    {% else %}
+                        <!-- Dynamic Dropdown for National/Wilaya Admins -->
+                        <select name="commune" id="commune_select" required class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:ring-2 focus:ring-[var(--brand-green)] [&>option]:text-gray-900 [&>option]:bg-white">
+                            <option value="">اختر الولاية أولاً...</option>
+                        </select>
+                    {% endif %}
+                </div>
+
+            </div>
+
+            <!-- Bureau Code -->
+            <div>
+                <label for="code" class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">رمز المحضر <span class="text-red-400">*</span></label>
+                <input type="text" name="code" id="code" required placeholder="مثال: 001 أو 16A"
+                       class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[var(--brand-green)] focus:border-transparent text-white placeholder-[var(--text-muted)]/50 outline-none transition-all">
+            </div>
+
+            <!-- Optional Fields -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                    <label for="name" class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">اسم المحضر <span class="text-xs text-[var(--brand-terra)]">(اختياري)</span></label>
+                    <input type="text" name="name" id="name" placeholder="مثال: مدرسة أحمد زبانة"
+                           class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[var(--brand-green)] focus:border-transparent text-white placeholder-[var(--text-muted)]/50 outline-none transition-all">
+                </div>
+
+                <div>
+                    <label for="registered_voters" class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">عدد المسجلين <span class="text-xs text-[var(--brand-terra)]">(اختياري)</span></label>
+                    <input type="number" name="registered_voters" id="registered_voters" placeholder="مثال: 342"
+                           class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[var(--brand-green)] focus:border-transparent text-white placeholder-[var(--text-muted)]/50 outline-none transition-all">
+                </div>
+            </div>
+
+            <!-- Submit -->
+            <button type="submit" class="w-full btn-primary justify-center py-4 text-base">
+                <span>إضافة المركز</span>
+                <i class="fa-solid fa-plus"></i>
+            </button>
+        </form>
+    </div>
+
+    <!-- Info Note -->
+    <div class="glass-panel p-5 border border-white/5">
+        <h3 class="text-base font-bold text-white mb-3"><i class="fa-solid fa-circle-info text-[var(--brand-green)] me-2"></i>ملاحظات هامة</h3>
+        <ul class="space-y-2 text-sm text-[var(--text-muted)]">
+            <li class="flex items-start gap-2">
+                <span class="text-[var(--brand-terra)] mt-1">•</span>
+                <span>يتم تقييد قائمة البلديات تلقائياً حسب صلاحياتك (وطني / ولاية / بلدية).</span>
+            </li>
+            <li class="flex items-start gap-2">
+                <span class="text-[var(--brand-terra)] mt-1">•</span>
+                <span>رمز المحضر يجب أن يكون فريداً داخل البلدية والانتخاب نفسه.</span>
+            </li>
+            <li class="flex items-start gap-2">
+                <span class="text-[var(--brand-terra)] mt-1">•</span>
+                <span>يمكنك تعديل اسم المحضر وعدد الناخبين لاحقاً من لوحة التحكم.</span>
+            </li>
+        </ul>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const wilayaInput = document.getElementById('wilaya_id');
+    const communeSelect = document.getElementById('commune_select');
+
+    // If this is a Commune admin, they don't have a commune dropdown to load
+    if (!communeSelect) return;
+
+    function loadCommunes(wilayaId) {
+        if (!wilayaId) {
+            communeSelect.innerHTML = '<option value="">اختر الولاية أولاً...</option>';
+            return;
+        }
+        communeSelect.innerHTML = '<option value="">جاري تحميل البلديات...</option>';
+        
+        fetch(`/elections/api/communes/${wilayaId}/`)
+            .then(res => res.json())
+            .then(data => {
+                communeSelect.innerHTML = '<option value="">اختر البلدية...</option>';
+                if (data.length === 0) {
+                    communeSelect.innerHTML += '<option value="" disabled>لا توجد بلديات</option>';
+                    return;
+                }
+                data.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name_fr + (c.name_ar && c.name_ar !== c.name_fr ? ` - ${c.name_ar}` : '');
+                    communeSelect.appendChild(opt);
+                });
+            })
+            .catch(() => communeSelect.innerHTML = '<option value="">خطأ في التحميل</option>');
+    }
+
+    //  Smart Initialization: Works for both Dropdown (National) and Hidden Input (Wilaya/Commune)
+    if (wilayaInput.tagName === 'SELECT') {
+        // National Admin: Listen for changes
+        wilayaInput.addEventListener('change', function() { loadCommunes(this.value); });
+        if (wilayaInput.value) loadCommunes(wilayaInput.value);
+    } else if (wilayaInput.value) {
+        // Wilaya/Commune Admin: Auto-load immediately on page load
+        loadCommunes(wilayaInput.value);
+    }
+});
+</script>
+{% endblock %}

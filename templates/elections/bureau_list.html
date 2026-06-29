@@ -1,0 +1,281 @@
+{% extends "base_dashboard.html" %}
+
+{% block dashboard_content %}
+<div class="space-y-6 max-w-7xl mx-auto">
+    
+    <!-- Page Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">قائمة المحاضر البلدية</h1>
+            <p class="text-[var(--text-muted)] mt-1 text-sm">
+                {% if active_election %} {{ active_election.name_fr }} • {{ active_election.get_type_display }} {% else %} لا توجد انتخابات مفتوحة حالياً {% endif %}
+            </p>
+        </div>
+        {% if role != 'commune' %}
+            <a href="{% url 'elections:create_bureau' %}" class="btn-primary inline-flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> <span>إضافة محضر</span>
+            </a>
+        {% endif %}
+    </div>
+
+    <!-- Advanced Filters -->
+    <div class="glass-panel p-4">
+        <form method="get" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+            <div>
+                <label class="block text-xs text-[var(--text-muted)] mb-1">الانتخاب</label>
+                <select name="election" class="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm outline-none [&>option]:text-gray-900 [&>option]:bg-white">
+                    <option value="">كل الانتخابات</option>
+                    {% for election in elections %}
+                        <option value="{{ election.id }}" {% if active_election and active_election.id == election.id %}selected{% endif %}>{{ election.name_fr }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-[var(--text-muted)] mb-1">بحث (رمز أو اسم)</label>
+                <input type="text" name="search" value="{{ search_query|default:'' }}" placeholder="ابحث..." class="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm outline-none">
+            </div>
+            <div>
+                <label class="block text-xs text-[var(--text-muted)] mb-1">الولاية</label>
+                <select name="wilaya" id="filterWilaya" class="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm outline-none [&>option]:text-gray-900 [&>option]:bg-white">
+                    <option value="">كل الولايات</option>
+                    {% for w in wilayas %}
+                        <option value="{{ w.id }}" {% if selected_wilaya == w.id|stringformat:"s" %}selected{% endif %}>{{ w.name_fr }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-[var(--text-muted)] mb-1">البلدية</label>
+                <select name="commune" id="filterCommune" class="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm outline-none [&>option]:text-gray-900 [&>option]:bg-white">
+                    <option value="">اختر الولاية أولاً</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-[var(--text-muted)] mb-1">الحالة</label>
+                <select name="status" class="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm outline-none [&>option]:text-gray-900 [&>option]:bg-white">
+                    <option value="">الكل</option>
+                    <option value="completed" {% if selected_status == 'completed' %}selected{% endif %}>مكتمل</option>
+                    <option value="pending" {% if selected_status == 'pending' %}selected{% endif %}>لم يبدأ</option>
+                </select>
+            </div>
+            <div class="lg:col-span-5 flex gap-2 justify-end">
+                <button type="submit" class="px-4 py-2 bg-[var(--brand-green)] text-white rounded-lg text-sm font-medium hover:bg-[var(--brand-green)]/90 transition">
+                    <i class="fa-solid fa-filter ml-1"></i> تطبيق الفلتر
+                </button>
+                <a href="?" class="px-4 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-sm font-medium hover:bg-white/10 transition">
+                    <i class="fa-solid fa-rotate-right ml-1"></i> إعادة تعيين
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Bulk Action Bar (Hidden by default) -->
+    <div id="bulkActionBar" class="hidden glass-panel p-3 flex items-center justify-between bg-[var(--brand-terra)]/10 border border-[var(--brand-terra)]/30 sticky top-2 z-40">
+        <div class="flex items-center gap-3">
+            <input type="checkbox" id="selectAllTop" class="w-5 h-5 rounded accent-[var(--brand-terra)]">
+            <span class="text-white font-medium">تم اختيار <span id="selectedCount" class="text-[var(--brand-terra)] font-bold">0</span> مركز</span>
+        </div>
+        <button type="button" id="bulkDeleteBtn" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition flex items-center gap-2">
+            <i class="fa-solid fa-trash"></i> <span>حذف المحدد</span>
+        </button>
+    </div>
+
+    <!-- Bureau List Table -->
+    {% if page_obj %}
+        <div class="glass-panel overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-right">
+                            <!-- 📄 Pagination Controls -->
+        {% if page_obj.has_other_pages %}
+        <div class="p-4 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/5">
+            <div class="text-sm text-[var(--text-muted)]">
+                عرض {{ page_obj.start_index }} إلى {{ page_obj.end_index }} من أصل {{ page_obj.paginator.count }} محضر
+            </div>
+            <div class="flex items-center gap-2">
+                <!-- Previous Button -->
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.election %}&election={{ request.GET.election }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.wilaya %}&wilaya={{ request.GET.wilaya }}{% endif %}{% if request.GET.commune %}&commune={{ request.GET.commune }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}" 
+                   class="px-3 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-sm hover:bg-white/10 transition flex items-center gap-1">
+                    <i class="fa-solid fa-chevron-right text-xs"></i> السابق
+                </a>
+                {% else %}
+                <span class="px-3 py-2 bg-white/5 border border-white/10 text-gray-500 rounded-lg text-sm cursor-not-allowed opacity-50 flex items-center gap-1">
+                    <i class="fa-solid fa-chevron-right text-xs"></i> السابق
+                </span>
+                {% endif %}
+
+                <!-- Page Numbers -->
+                <div class="flex items-center gap-1">
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <!-- Current Page -->
+                            <span class="px-3 py-2 bg-[var(--brand-green)]/20 text-[var(--brand-green-glow)] border border-[var(--brand-green)]/40 rounded-lg text-sm font-bold">{{ num }}</span>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <!-- Nearby Pages -->
+                            <a href="?page={{ num }}{% if request.GET.election %}&election={{ request.GET.election }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.wilaya %}&wilaya={{ request.GET.wilaya }}{% endif %}{% if request.GET.commune %}&commune={{ request.GET.commune }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}" 
+                               class="px-3 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-sm hover:bg-white/10 transition">{{ num }}</a>
+                        {% elif num == page_obj.number|add:'-3' or num == page_obj.number|add:'3' %}
+                            <!-- Ellipsis -->
+                            <span class="px-2 text-[var(--text-muted)]">...</span>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+
+                <!-- Next Button -->
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if request.GET.election %}&election={{ request.GET.election }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.wilaya %}&wilaya={{ request.GET.wilaya }}{% endif %}{% if request.GET.commune %}&commune={{ request.GET.commune }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}" 
+                   class="px-3 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-sm hover:bg-white/10 transition flex items-center gap-1">
+                    التالي <i class="fa-solid fa-chevron-left text-xs"></i>
+                </a>
+                {% else %}
+                <span class="px-3 py-2 bg-white/5 border border-white/10 text-gray-500 rounded-lg text-sm cursor-not-allowed opacity-50 flex items-center gap-1">
+                    التالي <i class="fa-solid fa-chevron-left text-xs"></i>
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+                    <thead class="text-xs text-[var(--text-muted)] uppercase bg-white/5 border-b border-white/10">
+                        <tr>
+                            <th class="px-4 py-4 text-center w-10">
+                                <input type="checkbox" id="selectAllHeader" class="w-4 h-4 rounded accent-[var(--brand-green)]">
+                            </th>
+                            <th class="px-4 py-4 font-medium">البلدية / الولاية</th>
+                            <th class="px-4 py-4 font-medium">الرمز</th>
+                            <th class="px-4 py-4 font-medium">الاسم</th>
+                            <th class="px-4 py-4 font-medium">المسجلون</th>
+                            <th class="px-4 py-4 font-medium">أصوات الحركة</th>
+                            <th class="px-4 py-4 font-medium">الحالة</th>
+                            <th class="px-4 py-4 font-medium text-center">الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/5">
+                        {% for bureau in page_obj %}
+                        <tr class="hover:bg-white/5 transition-colors">
+                            <td class="px-4 py-4 text-center">
+                                <input type="checkbox" class="bureau-checkbox w-4 h-4 rounded accent-[var(--brand-green)]" value="{{ bureau.id }}">
+                            </td>
+                            <td class="px-4 py-4">
+                                <div class="font-medium text-white">{{ bureau.commune.name_fr }}</div>
+                                <div class="text-xs text-[var(--text-muted)]">{{ bureau.commune.wilaya.name_fr }}</div>
+                            </td>
+                            <td class="px-4 py-4 font-mono text-[var(--brand-terra)]">{{ bureau.code }}</td>
+                            <td class="px-4 py-4 text-white">{{ bureau.name|default:"—" }}</td>
+                            <td class="px-4 py-4 text-white">{{ bureau.registered_voters|default:"—" }}</td>
+                            <td class="px-4 py-4">
+                                {% if bureau.has_result %}
+                                    <span class="font-bold text-[var(--brand-green-glow)]">{{ bureau.msp_votes|default:0 }}</span>
+                                {% else %}
+                                    <span class="text-[var(--text-muted)]">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-4">
+                                {% if bureau.has_result %}
+                                    <span class="px-2.5 py-1 text-xs font-medium rounded-full bg-[var(--brand-green)]/20 text-[var(--brand-green-glow)] border border-[var(--brand-green)]/30">مكتمل</span>
+                                {% else %}
+                                    <span class="px-2.5 py-1 text-xs font-medium rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">لم يبدأ</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-4">
+                                <div class="flex items-center justify-center gap-2">
+                                    <a href="{% url 'elections:edit_bureau' bureau.id %}" class="p-2 text-white bg-[var(--brand-terra)] hover:bg-[var(--brand-terra)]/90 rounded-lg transition-colors" title="تعديل"><i class="fa-solid fa-pen text-xs"></i></a>
+                                    <a href="{% url 'elections:enter_results' bureau.id %}" class="p-2 text-white bg-[var(--brand-green)] hover:bg-[var(--brand-green)]/90 rounded-lg transition-colors" title="النتائج"><i class="fa-solid fa-pen-to-square text-xs"></i></a>
+                                    <a href="{% url 'elections:delete_bureau' bureau.id %}" class="p-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors" title="حذف"><i class="fa-solid fa-trash text-xs"></i></a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Summary Stats -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="glass-panel p-4 text-center"><p class="text-2xl font-bold text-white">{{ total_bureaux }}</p><p class="text-xs text-[var(--text-muted)]">إجمالي المحاضر</p></div>
+            <div class="glass-panel p-4 text-center"><p class="text-2xl font-bold text-[var(--brand-green-glow)]">{{ reported_bureaux }}</p><p class="text-xs text-[var(--text-muted)]">محاضر مصرحة</p></div>
+            <div class="glass-panel p-4 text-center"><p class="text-2xl font-bold text-amber-400">{{ pending_bureaux }}</p><p class="text-xs text-[var(--text-muted)]">في الانتظار</p></div>
+            <div class="glass-panel p-4 text-center"><p class="text-2xl font-bold text-white">{{ completion_percentage }}%</p><p class="text-xs text-[var(--text-muted)]">نسبة الإنجاز</p></div>
+        </div>
+    {% else %}
+        <div class="glass-panel p-12 text-center">
+            <i class="fa-solid fa-folder-open text-5xl text-[var(--text-muted)]/50 mb-4"></i>
+            <h3 class="text-lg font-bold text-white mb-2">لا توجد محاضر بلديةمطابقة</h3>
+            <p class="text-[var(--text-muted)]">حاول تغيير معايير البحث أو الفلتر.</p>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const filterWilaya = document.getElementById('filterWilaya');
+    const filterCommune = document.getElementById('filterCommune');
+    const selectAllHeader = document.getElementById('selectAllHeader');
+    const selectAllTop = document.getElementById('selectAllTop');
+    const bulkActionBar = document.getElementById('bulkActionBar');
+    const selectedCount = document.getElementById('selectedCount');
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    const checkboxes = document.querySelectorAll('.bureau-checkbox');
+    const selectedCommuneId = "{{ selected_commune|default:'' }}";
+
+    // 1. Dynamic Commune Loading
+    function loadCommunes(wilayaId, preselectId = null) {
+        if (!wilayaId) { filterCommune.innerHTML = '<option value="">اختر الولاية أولاً</option>'; return; }
+        filterCommune.innerHTML = '<option value="">جاري التحميل...</option>';
+        fetch(`/elections/api/communes/${wilayaId}/`)
+            .then(res => res.json())
+            .then(data => {
+                filterCommune.innerHTML = '<option value="">كل البلديات</option>';
+                data.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name_fr;
+                    if (preselectId && c.id == preselectId) opt.selected = true;
+                    filterCommune.appendChild(opt);
+                });
+            });
+    }
+
+    filterWilaya.addEventListener('change', function() { loadCommunes(this.value); });
+    if (filterWilaya.value) { loadCommunes(filterWilaya.value, selectedCommuneId); }
+
+    // 2. Checkbox Logic
+    function updateBulkBar() {
+        const checkedBoxes = document.querySelectorAll('.bureau-checkbox:checked');
+        const count = checkedBoxes.length;
+        selectedCount.textContent = count;
+        if (count > 0) { bulkActionBar.classList.remove('hidden'); } 
+        else { bulkActionBar.classList.add('hidden'); }
+        selectAllHeader.checked = count === checkboxes.length && checkboxes.length > 0;
+        selectAllTop.checked = selectAllHeader.checked;
+    }
+
+    checkboxes.forEach(cb => cb.addEventListener('change', updateBulkBar));
+    
+    function toggleAll(source) {
+        checkboxes.forEach(cb => cb.checked = source.checked);
+        updateBulkBar();
+    }
+
+    selectAllHeader.addEventListener('change', function() { toggleAll(this); });
+    selectAllTop.addEventListener('change', function() { toggleAll(this); });
+
+    // 3. Bulk Delete Action
+    bulkDeleteBtn.addEventListener('click', function() {
+        const checkedBoxes = document.querySelectorAll('.bureau-checkbox:checked');
+        if (checkedBoxes.length === 0) return;
+        if (!confirm(`هل أنت متأكد من حذف ${checkedBoxes.length} مركز؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
+
+        const formData = new FormData();
+        checkedBoxes.forEach(cb => formData.append('bureau_ids', cb.value));
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        fetch('{% url "elections:bulk_delete_bureaux" %}', { method: 'POST', body: formData })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) { location.reload(); } 
+            else { alert(data.error || 'حدث خطأ أثناء الحذف'); }
+        });
+    });
+});
+</script>
+{% endblock %}

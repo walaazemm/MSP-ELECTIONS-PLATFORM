@@ -1,0 +1,267 @@
+{% extends "base_dashboard.html" %}
+{% load humanize %}
+
+{% block dashboard_content %}
+<div class="space-y-6 max-w-7xl mx-auto">
+    
+    <!-- Header with Back Button -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+            <a href="{% url 'home' %}" class="text-[var(--brand-terra)] hover:text-white transition-colors">
+                <i class="fa-solid fa-arrow-right rtl-flip"></i>
+            </a>
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+                    {{ wilaya.name_ar }} <span class="text-[var(--text-muted)]">({{ wilaya.code }})</span>
+                </h1>
+                <p class="text-[var(--text-muted)] mt-1 text-sm">
+                    {% if active_election %}{{ active_election.name_fr }}{% else %}لا توجد انتخابات نشطة{% endif %}
+                </p>
+            </div>
+        </div>
+        <a href="{% url 'export_results' %}?wilaya={{ wilaya.code }}" class="btn-primary flex items-center gap-2">
+            <i class="fa-solid fa-download"></i>
+            <span>تصدير</span>
+        </a>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass-panel p-4 text-center">
+            <p class="text-2xl font-bold text-white">{{ stats.registered_voters|intcomma }}</p>
+            <p class="text-xs text-[var(--text-muted)]">المسجلون</p>
+        </div>
+        <div class="glass-panel p-4 text-center">
+            <p class="text-2xl font-bold text-[var(--brand-terra)]">{{ stats.turnout_percent }}%</p>
+            <p class="text-xs text-[var(--text-muted)]">المشاركة</p>
+        </div>
+        <div class="glass-panel p-4 text-center border-[var(--brand-green)]/30">
+            <p class="text-2xl font-bold text-[var(--brand-green-glow)]">{{ stats.msp_votes|intcomma }}</p>
+            <p class="text-xs text-[var(--text-muted)]">أصوات الحركة</p>
+        </div>
+        <div class="glass-panel p-4 text-center">
+            <p class="text-2xl font-bold text-amber-400">{{ stats.completion_percent }}%</p>
+            <p class="text-xs text-[var(--text-muted)]">إنجاز التصريح</p>
+        </div>
+    </div>
+
+    <!-- 🏛️ Detailed Seat Allocation Audit -->
+    <div class="glass-panel p-6 mt-6 border border-white/5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-2">
+            <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-calculator text-[var(--brand-terra)]"></i>
+                الإسقاط التفصيلي للمقاعد (<span id="currentSeats">{{ seats_meta.total_seats|default:total_seats }}</span> مقعد)
+            </h3>
+            {% if role == 'national' or role == 'super_admin' %}
+            <button type="button" onclick="document.getElementById('seatsModal').classList.remove('hidden')" class="text-xs text-[var(--brand-terra)] hover:text-white transition flex items-center gap-1">
+                <i class="fa-solid fa-pen-to-square"></i> تعديل عدد المقاعد
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- 1. Operations Summary -->
+        {% if seats_meta %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div class="p-4 bg-white/5 rounded-xl border border-white/10 text-center">
+                <p class="text-xs text-[var(--text-muted)] uppercase mb-1">الأصوات المعبر عنها (أولياً)</p>
+                <p class="text-2xl font-bold text-white">{{ seats_meta.valid_votes|intcomma|default:0 }}</p>
+            </div>
+            <div class="p-4 bg-red-500/5 rounded-xl border border-red-500/20 text-center">
+                <p class="text-xs text-red-400 uppercase mb-1">العتبة (5%)</p>
+                <p class="text-2xl font-bold text-red-400">{{ seats_meta.threshold|floatformat:0|intcomma|default:0 }}</p>
+                <p class="text-[10px] text-[var(--text-muted)] mt-1">أُقصي {{ seats_meta.eliminated_votes|intcomma|default:0 }} صوت</p>
+            </div>
+            <div class="p-4 bg-blue-500/5 rounded-xl border border-blue-500/20 text-center">
+                <p class="text-xs text-blue-400 uppercase mb-1">الأصوات المعبر عنها (نهائياً)</p>
+                <p class="text-2xl font-bold text-blue-400">{{ seats_meta.new_valid_votes|intcomma|default:0 }}</p>
+                <p class="text-[10px] text-[var(--text-muted)] mt-1">بعد إسقاط القوائم</p>
+            </div>
+            <div class="p-4 bg-amber-500/5 rounded-xl border border-amber-500/20 text-center">
+                <p class="text-xs text-amber-400 uppercase mb-1">المعامل الانتخابي</p>
+                <p class="text-2xl font-bold text-amber-400">{{ seats_meta.quotient|intcomma|default:0 }}</p>
+                <p class="text-[10px] text-[var(--text-muted)] mt-1">سعر المقعد الواحد</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 2. Table -->
+        {% if seats_projection %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm text-right">
+                <thead class="bg-white/5 text-xs uppercase text-[var(--text-muted)]">
+                    <tr>
+                        <th class="px-4 py-3">القائمة / الحزب</th>
+                        <th class="px-4 py-3 text-center">الأصوات</th>
+                        <th class="px-4 py-3 text-center">الحالة</th>
+                        <th class="px-4 py-3 text-center">التوزيع الأول<br><span class="text-[10px] font-normal">(÷ {{ seats_meta.quotient|default:0 }})</span></th>
+                        <th class="px-4 py-3 text-center">الباقي (العدد بعد الفاصلة)</th>
+                        <th class="px-4 py-3 text-center">الباقي الأقوى</th>
+                        <th class="px-4 py-3 text-center bg-[var(--brand-green)]/10 text-[var(--brand-green-glow)]">الإجمالي</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5">
+                    {% for lid, data in seats_projection.items %}
+                    <tr class="hover:bg-white/5 transition-colors {% if data.is_our_party %}bg-[var(--brand-green)]/5{% endif %}">
+                        <td class="px-4 py-3 font-medium text-white">
+                            {{ data.name|default:"قائمة" }}
+                            {% if data.is_our_party %}<span class="text-[10px] bg-[var(--brand-green)]/20 text-[var(--brand-green-glow)] px-2 py-0.5 rounded mr-1">MSP</span>{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-center text-white">{{ data.votes|intcomma|default:0 }}</td>
+                        <td class="px-4 py-3 text-center">
+                            {% if data.status == 'eliminated' %}
+                                <span class="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">أُقصيت</span>
+                            {% elif data.status == 'qualified' %}
+                                <span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">تأهلت</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-center text-white font-bold">{{ data.initial_seats|default:0 }}</td>
+                        <td class="px-4 py-3 text-center text-[var(--text-muted)]">
+                            {% if data.status == 'qualified' %}
+                                {{ data.exact_division|floatformat:2 }} 
+                                <span class="text-xs block text-amber-400 font-bold">({{ data.remainder|floatformat:2 }})</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            {% if data.extra_seats > 0 %}
+                                <span class="text-amber-400 font-bold">+{{ data.extra_seats }}</span>
+                            {% else %}
+                                <span class="text-[var(--text-muted)]">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-center bg-[var(--brand-green)]/5">
+                            <span class="text-xl font-extrabold {% if data.is_our_party %}text-[var(--brand-green-glow)]{% else %}text-white{% endif %}">
+                                {{ data.seats|default:0 }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-white/5 font-bold">
+                    <tr>
+                        <td class="px-4 py-3 text-white">المجموع</td>
+                        <td class="px-4 py-3 text-center text-white">{{ seats_meta.initial_valid_votes|intcomma|default:0 }}</td>
+                        <td class="px-4 py-3"></td>
+                        <td class="px-4 py-3 text-center text-white">{{ seats_meta.total_initial_seats|default:0 }}</td>
+                        <td class="px-4 py-3"></td>
+                        <td class="px-4 py-3 text-center text-amber-400">+{{ seats_meta.total_extra_seats|default:0 }}</td>
+                        <td class="px-4 py-3 text-center text-[var(--brand-green-glow)] text-xl">{{ seats_meta.total_final_seats|default:0 }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-10 bg-white/5 rounded-xl border border-dashed border-white/10">
+            <i class="fa-solid fa-chart-pie text-4xl text-[var(--text-muted)] mb-3"></i>
+            <p class="text-[var(--text-muted)] font-medium">لا توجد بيانات كافية لحساب المقاعد حالياً.</p>
+        </div>
+        {% endif %}
+        
+        <p class="text-xs text-[var(--text-muted)] mt-4 text-center italic">
+            * يتم الحساب بناءً على القانون الانتخابي الجزائري: إقصاء القوائم تحت 5%، توزيع المعامل الانتخابي، وقاعدة الباقي الأقوى.
+        </p>
+    </div>
+
+    <!-- Seats Modal -->
+    <div id="seatsModal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+        <div class="glass-panel p-6 w-full max-w-sm space-y-4 border border-white/10">
+            <h3 class="text-lg font-bold text-white">تعديل عدد المقاعد</h3>
+            <input type="number" id="newSeatsInput" min="1" value="{{ wilaya.total_seats|default:4 }}" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:ring-2 focus:ring-[var(--brand-green)]">
+            <div class="flex gap-3">
+                <button type="button" onclick="saveSeats('{{ wilaya.id }}')" class="flex-1 btn-primary py-2 justify-center">حفظ</button>
+                <button type="button" onclick="document.getElementById('seatsModal').classList.add('hidden')" class="px-4 py-2 bg-white/10 text-white rounded-xl">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Communes Table -->
+    <div class="glass-panel overflow-hidden">
+        <div class="p-4 border-b border-white/5">
+            <h3 class="font-bold text-white">البلديات ({{ communes.count }})</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm text-right">
+                <thead class="bg-white/5 text-xs uppercase text-[var(--text-muted)]">
+                    <tr>
+                        <th class="px-6 py-3">البلدية</th>
+                        <th class="px-6 py-3">المحاضر المصرحة</th>
+                        <th class="px-6 py-3">أصوات الحركة</th>
+                        <th class="px-6 py-3">الإجراء</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5">
+                    {% for commune in communes %}
+                    <tr class="hover:bg-white/5 transition-colors">
+                        <td class="px-6 py-4 font-medium text-white">{{ commune.name_ar }}</td>
+                        <td class="px-6 py-4">
+                            <span class="text-white">{{ commune.reported_bureaux }}</span>
+                            <span class="text-[var(--text-muted)]">/ {{ commune.total_bureaux }}</span>
+                        </td>
+                        <td class="px-6 py-4 font-bold text-[var(--brand-green-glow)]">{{ commune.msp_votes|default:0|intcomma }}</td>
+                        <td class="px-6 py-4 text-center">
+    {% if commune.pv_id %}
+        <a href="{% url 'elections:enter_results' commune.pv_id %}" 
+           class="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-[var(--brand-green)] hover:bg-[var(--brand-green)]/90 rounded-lg shadow-sm shadow-[var(--brand-green)]/20 transition-all hover:scale-105">
+            <i class="fa-solid fa-file-signature"></i>
+            إدخال المحضر
+        </a>
+    {% else %}
+        <span class="text-xs text-[var(--text-muted)]">—</span>
+    {% endif %}
+</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="px-6 py-8 text-center text-[var(--text-muted)]">لا توجد بلديات مسجلة</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="glass-panel p-6">
+        <h3 class="text-lg font-bold text-white mb-4">أحدث النشاطات في {{ wilaya.name_ar }}</h3>
+        <div class="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+            {% for activity in recent_activities %}
+            <div class="flex gap-3 p-3 rounded-xl bg-white/5 border border-white/5">
+                <div class="w-8 h-8 rounded-full bg-[var(--brand-green)]/20 text-[var(--brand-green-glow)] flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-check text-xs"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm text-white font-medium truncate">
+                        {{ activity.bureau.commune.name_ar }} - {{ activity.bureau.code }}
+                    </p>
+                    <p class="text-xs text-[var(--text-muted)] mt-1">
+                        {{ activity.submitted_at|date:"H:i" }} • {{ activity.submitted_by.full_name|default:"مجهول" }}
+                    </p>
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-[var(--text-muted)] text-center py-4">لا توجد نشاطات حديثة</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+function saveSeats(wilayaId) {
+    const seats = document.getElementById('newSeatsInput').value;
+    const formData = new FormData();
+    formData.append('seats', seats);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    
+    fetch('/elections/api/wilaya/' + wilayaId + '/seats/', { method: 'POST', body: formData })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('currentSeats').textContent = data.seats;
+                document.getElementById('seatsModal').classList.add('hidden');
+                location.reload();
+            } else {
+                alert(data.error);
+            }
+        });
+}
+</script>
+{% endblock %}

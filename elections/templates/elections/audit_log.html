@@ -1,0 +1,349 @@
+{% extends "base_dashboard.html" %}
+{% load humanize %}
+
+{% block dashboard_content %}
+<div class="space-y-6 max-w-7xl mx-auto">
+    
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
+                <i class="fa-solid fa-shield-halved text-[var(--brand-terra)]"></i>
+                سجل التدقيق
+            </h1>
+            <p class="text-[var(--text-muted)] mt-1 text-sm">
+                تتبع جميع العمليات التي تمت على النظام
+            </p>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="exportLogs()" class="btn-secondary inline-flex items-center gap-2">
+                <i class="fa-solid fa-download"></i>
+                <span>تصدير</span>
+            </button>
+            <button onclick="location.reload()" class="btn-primary inline-flex items-center gap-2">
+                <i class="fa-solid fa-rotate"></i>
+                <span>تحديث</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="glass-panel p-5 flex items-center gap-4">
+            <div class="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-xl flex items-center justify-center border border-blue-500/20">
+                <i class="fa-solid fa-list-ul text-xl"></i>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-white">{{ total_logs|intcomma }}</p>
+                <p class="text-xs text-[var(--text-muted)]">إجمالي العمليات</p>
+            </div>
+        </div>
+        
+        <div class="glass-panel p-5 flex items-center gap-4">
+            <div class="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center border border-emerald-500/20">
+                <i class="fa-solid fa-calendar-day text-xl"></i>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-white">{{ today_logs|intcomma }}</p>
+                <p class="text-xs text-[var(--text-muted)]">عمليات اليوم</p>
+            </div>
+        </div>
+        
+        <div class="glass-panel p-5 flex items-center gap-4">
+            <div class="w-12 h-12 bg-red-500/10 text-red-400 rounded-xl flex items-center justify-center border border-red-500/20">
+                <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-white">{{ critical_actions|intcomma }}</p>
+                <p class="text-xs text-[var(--text-muted)]">عمليات حرجة (حذف)</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="glass-panel p-5">
+        <form method="get" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- User Filter -->
+                <div>
+                    <label class="block text-xs text-[var(--text-muted)] mb-2">المستخدم</label>
+                    <select name="user" class="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm outline-none [&>option]:text-gray-900 [&>option]:bg-white">
+                        <option value="">جميع المستخدمين</option>
+                        {% for user in all_users %}
+                        <option value="{{ user.id }}" {% if user_filter == user.id|stringformat:"s" %}selected{% endif %}>
+                            {{ user.full_name }} ({{ user.role_profile.get_role_display }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Action Filter -->
+                <div>
+                    <label class="block text-xs text-[var(--text-muted)] mb-2">نوع العملية</label>
+                    <select name="action" class="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm outline-none [&>option]:text-gray-900 [&>option]:bg-white">
+                        <option value="">جميع العمليات</option>
+                        {% for action_value, action_label in action_choices %}
+                        <option value="{{ action_value }}" {% if action_filter == action_value %}selected{% endif %}>
+                            {{ action_label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Table Filter -->
+                <div>
+                    <label class="block text-xs text-[var(--text-muted)] mb-2">الجدول</label>
+                    <select name="table" class="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm outline-none [&>option]:text-gray-900 [&>option]:bg-white">
+                        <option value="">جميع الجداول</option>
+                        {% for table in table_choices %}
+                        <option value="{{ table }}" {% if table_filter == table %}selected{% endif %}>
+                            {{ table }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Date From -->
+                <div>
+                    <label class="block text-xs text-[var(--text-muted)] mb-2">من تاريخ</label>
+                    <input type="date" name="date_from" value="{{ date_from }}" class="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm outline-none">
+                </div>
+
+                <!-- Date To -->
+                <div>
+                    <label class="block text-xs text-[var(--text-muted)] mb-2">إلى تاريخ</label>
+                    <input type="date" name="date_to" value="{{ date_to }}" class="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm outline-none">
+                </div>
+
+                <!-- Search -->
+                <div>
+                    <label class="block text-xs text-[var(--text-muted)] mb-2">بحث</label>
+                    <input type="text" name="search" value="{{ search_query }}" placeholder="ابحث في السجلات..." class="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm outline-none">
+                </div>
+            </div>
+
+            <div class="flex gap-3 justify-end">
+                <button type="submit" class="px-6 py-2.5 bg-[var(--brand-green)] text-white rounded-lg text-sm font-medium hover:bg-[var(--brand-green)]/90 transition inline-flex items-center gap-2">
+                    <i class="fa-solid fa-filter"></i>
+                    <span>تطبيق الفلتر</span>
+                </button>
+                <a href="{% url 'elections:audit_log' %}" class="px-6 py-2.5 bg-white/5 border border-white/10 text-white rounded-lg text-sm font-medium hover:bg-white/10 transition inline-flex items-center gap-2">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span>إعادة تعيين</span>
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Audit Logs Table -->
+    {% if page_obj %}
+    <div class="glass-panel overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm text-right">
+                <thead class="bg-white/5 text-xs uppercase text-[var(--text-muted)] border-b border-white/10">
+                    <tr>
+                        <th class="px-4 py-4 font-medium">الوقت</th>
+                        <th class="px-4 py-4 font-medium">المستخدم</th>
+                        <th class="px-4 py-4 font-medium">العملية</th>
+                        <th class="px-4 py-4 font-medium">الجدول</th>
+                        <th class="px-4 py-4 font-medium">رقم السجل</th>
+                        <th class="px-4 py-4 font-medium">التفاصيل</th>
+                        <th class="px-4 py-4 font-medium">الإجراء</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5">
+                    {% for log in page_obj %}
+                    <tr class="hover:bg-white/5 transition-colors">
+                        <!-- Time -->
+                        <td class="px-4 py-4">
+                            <div class="text-white font-medium">{{ log.timestamp|date:"H:i" }}</div>
+                            <div class="text-xs text-[var(--text-muted)]">{{ log.timestamp|date:"d/m/Y" }}</div>
+                        </td>
+
+                        <!-- User -->
+                        <td class="px-4 py-4">
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--brand-green)] to-[var(--brand-terra)] flex items-center justify-center text-white text-xs font-bold">
+                                    {{ log.changed_by.full_name|first }}
+                                </div>
+                                <div>
+                                    <div class="text-white font-medium">{{ log.changed_by.full_name }}</div>
+                                    <div class="text-xs text-[var(--text-muted)]">{{ log.changed_by.role_profile.get_role_display }}</div>
+                                </div>
+                            </div>
+                        </td>
+
+                        <!-- Action -->
+                        <td class="px-4 py-4">
+                            {% if log.action == 'create' %}
+                                <span class="px-2.5 py-1 text-xs font-medium rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                    <i class="fa-solid fa-plus ml-1"></i>إضافة
+                                </span>
+                            {% elif log.action == 'update' %}
+                                <span class="px-2.5 py-1 text-xs font-medium rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                    <i class="fa-solid fa-pen ml-1"></i>تعديل
+                                </span>
+                            {% elif log.action == 'delete' %}
+                                <span class="px-2.5 py-1 text-xs font-medium rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
+                                    <i class="fa-solid fa-trash ml-1"></i>حذف
+                                </span>
+                            {% else %}
+                                <span class="px-2.5 py-1 text-xs font-medium rounded-full bg-gray-500/20 text-gray-400 border border-gray-500/30">
+                                    {{ log.get_action_display }}
+                                </span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Table -->
+                        <td class="px-4 py-4">
+                            <span class="text-white">{{ log.table_name }}</span>
+                        </td>
+
+                        <!-- Record ID -->
+                        <td class="px-4 py-4">
+                            <code class="text-xs bg-white/5 px-2 py-1 rounded text-[var(--brand-terra)]">{{ log.record_id }}</code>
+                        </td>
+
+                        <!-- Notes -->
+                        <td class="px-4 py-4 max-w-xs">
+                            <div class="text-white text-sm truncate" title="{{ log.notes }}">
+                                {{ log.notes|default:"—" }}
+                            </div>
+                        </td>
+
+                        <!-- Action Button -->
+                        <td class="px-4 py-4">
+                            <button onclick="showLogDetails('{{ log.id }}')" class="p-2 text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors" title="عرض التفاصيل">
+                                <i class="fa-solid fa-eye text-xs"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="p-4 border-t border-white/10 flex items-center justify-between">
+            <div class="text-sm text-[var(--text-muted)]">
+                عرض {{ page_obj.start_index }} إلى {{ page_obj.end_index }} من {{ page_obj.paginator.count }} سجل
+            </div>
+            <div class="flex gap-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="px-3 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-sm hover:bg-white/10 transition">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </a>
+                {% endif %}
+                
+                <span class="px-4 py-2 bg-[var(--brand-green)]/20 text-[var(--brand-green-glow)] rounded-lg text-sm font-medium">
+                    {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+                </span>
+                
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="px-3 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-sm hover:bg-white/10 transition">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="glass-panel p-12 text-center">
+        <i class="fa-solid fa-folder-open text-5xl text-[var(--text-muted)]/50 mb-4"></i>
+        <h3 class="text-lg font-bold text-white mb-2">لا توجد سجلات</h3>
+        <p class="text-[var(--text-muted)]">لم يتم العثور على أي عمليات مطابقة للفلتر المحدد</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Log Details Modal -->
+<div id="logDetailsModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-white/10">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-white">تفاصيل العملية</h3>
+            <button onclick="closeLogDetails()" class="text-[var(--text-muted)] hover:text-white transition">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+        </div>
+        <div id="logDetailsContent" class="space-y-4">
+            <!-- Content will be loaded here -->
+        </div>
+    </div>
+</div>
+
+<script>
+function showLogDetails(logId) {
+    const modal = document.getElementById('logDetailsModal');
+    const content = document.getElementById('logDetailsContent');
+    
+    content.innerHTML = '<div class="text-center py-8"><i class="fa-solid fa-spinner fa-spin text-2xl text-[var(--brand-terra)]"></i><p class="mt-2 text-[var(--text-muted)]">جاري تحميل التفاصيل...</p></div>';
+    modal.classList.remove('hidden');
+
+    fetch(`/elections/audit/${logId}/details/`)
+        .then(res => res.json())
+        .then(data => {
+            let html = `
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="p-3 bg-white/5 rounded-lg"><p class="text-xs text-[var(--text-muted)]">الجدول</p><p class="text-white font-bold">${data.table}</p></div>
+                    <div class="p-3 bg-white/5 rounded-lg"><p class="text-xs text-[var(--text-muted)]">رقم السجل</p><p class="text-white font-mono">#${data.record_id}</p></div>
+                    <div class="p-3 bg-white/5 rounded-lg"><p class="text-xs text-[var(--text-muted)]">المستخدم</p><p class="text-white">${data.user}</p></div>
+                    <div class="p-3 bg-white/5 rounded-lg"><p class="text-xs text-[var(--text-muted)]">الوقت</p><p class="text-white">${data.time}</p></div>
+                </div>
+                <div class="p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg mb-4">
+                    <p class="text-xs text-blue-400 mb-1">ملاحظة</p>
+                    <p class="text-white text-sm">${data.notes || 'لا توجد ملاحظات'}</p>
+                </div>
+            `;
+
+            if (data.action === 'تعديل' && data.old_values && data.new_values) {
+                html += `<h4 class="text-white font-bold mb-2">التغييرات التي تمت:</h4><div class="space-y-2 max-h-[300px] overflow-y-auto pr-2">`;
+                let hasChanges = false;
+                for (let key in data.new_values) {
+                    let oldVal = data.old_values[key];
+                    let newVal = data.new_values[key];
+                    if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+                        hasChanges = true;
+                        html += `
+                            <div class="p-3 bg-white/5 rounded-lg border border-white/10">
+                                <p class="text-xs text-[var(--brand-terra)] font-bold mb-1">${key}</p>
+                                <div class="grid grid-cols-2 gap-2 text-xs">
+                                    <div class="p-2 bg-red-500/10 rounded text-red-300">
+                                        <span class="block text-red-400 font-bold mb-1">القيمة القديمة</span>
+                                        ${oldVal !== null && oldVal !== undefined ? oldVal : '<em>فارغ</em>'}
+                                    </div>
+                                    <div class="p-2 bg-emerald-500/10 rounded text-emerald-300">
+                                        <span class="block text-emerald-400 font-bold mb-1">القيمة الجديدة</span>
+                                        ${newVal !== null && newVal !== undefined ? newVal : '<em>فارغ</em>'}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+                if (!hasChanges) html += '<p class="text-[var(--text-muted)] text-sm">لم يتم تغيير أي حقول.</p>';
+                html += `</div>`;
+            } else if (data.action === 'إضافة' && data.new_values) {
+                html += `<h4 class="text-white font-bold mb-2">البيانات المضافة:</h4><pre class="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg text-xs text-emerald-300 overflow-x-auto max-h-[300px]">${JSON.stringify(data.new_values, null, 2)}</pre>`;
+            } else if (data.action === 'حذف' && data.old_values) {
+                html += `<h4 class="text-white font-bold mb-2">البيانات المحذوفة:</h4><pre class="p-3 bg-red-500/5 border border-red-500/20 rounded-lg text-xs text-red-300 overflow-x-auto max-h-[300px]">${JSON.stringify(data.old_values, null, 2)}</pre>`;
+            }
+
+            content.innerHTML = html;
+        })
+        .catch(err => {
+            content.innerHTML = '<p class="text-red-400 text-center">حدث خطأ أثناء تحميل التفاصيل.</p>';
+        });
+}
+
+function closeLogDetails() {
+    document.getElementById('logDetailsModal').classList.add('hidden');
+}
+function exportLogs() {
+    // Export functionality
+    alert('سيتم تصدير السجلات كملف CSV');
+    // In production, you'd implement actual CSV export
+}
+</script>
+{% endblock %}

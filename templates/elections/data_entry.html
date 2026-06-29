@@ -1,0 +1,253 @@
+{% extends "base_dashboard.html" %}
+
+{% block dashboard_content %}
+<!-- ✨ Custom Animation for New Lists (Flashes twice then stops) -->
+<style>
+    @keyframes flash-new-item {
+        0%, 100% { 
+            filter: brightness(1); 
+            box-shadow: none;
+            border-color: rgba(255, 255, 255, 0.05);
+        }
+        50% { 
+            filter: brightness(1.4); 
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+            border-color: rgba(251, 191, 36, 0.6);
+        }
+    }
+    .animate-flash-new-item {
+        animation: flash-new-item 0.8s ease-in-out 2; /* Runs exactly 2 times */
+    }
+</style>
+
+<div class="max-w-4xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="glass-panel p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+            <h1 class="text-xl sm:text-2xl font-bold text-white">إدخال النتائج: {{ bureau.name|default:bureau.code }}</h1>
+            <p class="text-[var(--text-muted)] text-sm mt-1">{{ bureau.commune.name_fr }} - {{ bureau.commune.wilaya.name_fr }} | {{ bureau.election.name_fr }}</p>
+        </div>
+        <a href="{% url 'home' %}" class="text-sm text-[var(--text-muted)] hover:text-white transition-colors flex items-center gap-2">
+            <i class="fa-solid fa-arrow-right rtl-flip"></i>
+            <span>العودة للرئيسية</span>
+        </a>
+    </div>
+
+    <!-- Form -->
+    <form method="post" class="glass-panel p-6 sm:p-8 space-y-6" id="resultsForm">
+        {% csrf_token %}
+        
+        <!-- Core Metrics -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div>
+                <label class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">عدد الناخبين المسجلين</label>
+                <input type="number" name="registered_voters" min="0" value="{{ result.registered_voters|default:bureau.registered_voters|default:'' }}" class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[var(--brand-green)] text-white outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">إجمالي الحاضرين (المصوتون) <span class="text-red-400">*</span></label>
+                <input type="number" name="total_votes_cast" id="total_votes_cast" min="0" required value="{{ result.total_votes_cast|default:'' }}" class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[var(--brand-green)] text-white outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-[var(--text-muted)] mb-2 me-1">الأصوات الملغاة والبيضاء <span class="text-red-400">*</span></label>
+                <input type="number" name="null_votes" id="null_votes" min="0" required value="{{ result.null_votes|default:0 }}" class="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-[var(--brand-green)] text-white outline-none">
+            </div>
+        </div>
+
+        <!-- Live Math Validation Box -->
+        <div class="p-5 rounded-xl border border-white/10 bg-black/20 space-y-3">
+            <h4 class="text-sm font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-2">
+                <i class="fa-solid fa-calculator text-[var(--brand-terra)]"></i> الحساب الرياضي المباشر
+            </h4>
+            <div class="grid grid-cols-2 gap-4 text-center">
+                <div class="p-3 bg-white/5 rounded-lg border border-white/5">
+                    <p class="text-xs text-[var(--text-muted)]">الأصوات المعبر عنها (الصحيحة)</p>
+                    <p class="text-2xl font-bold text-white" id="validVotesDisplay">0</p>
+                    <p class="text-[10px] text-[var(--text-muted)] mt-1">(الحاضرون - الملغاة)</p>
+                </div>
+                <div class="p-3 bg-white/5 rounded-lg border border-white/5">
+                    <p class="text-xs text-[var(--text-muted)]">مجموع أصوات القوائم</p>
+                    <p class="text-2xl font-bold text-white" id="listSumDisplay">0</p>
+                </div>
+            </div>
+            <div id="reconciliationStatus" class="hidden"></div>
+        </div>
+
+        <!-- Lists Breakdown -->
+        <div class="space-y-4">
+            <div class="flex justify-between items-center border-b border-white/10 pb-2">
+                <h3 class="text-lg font-bold text-white">أصوات القوائم</h3>
+                <button type="button" onclick="document.getElementById('addListModal').classList.remove('hidden')" 
+                        class="text-xs px-3 py-1.5 bg-[var(--brand-terra)] text-white rounded-lg hover:bg-[var(--brand-terra)]/80 transition">
+                    <i class="fa-solid fa-plus me-1"></i> إضافة قائمة غير موجودة
+                </button>
+            </div>
+            
+            <div id="lists-container" class="space-y-3">
+                {% for lst in lists %}
+                <div class="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5 {% if lst.is_our_party %}border-[var(--brand-green)]/30 bg-[var(--brand-green)]/5{% endif %}">
+                    <div class="flex items-center gap-3">
+                        <div class="w-4 h-4 rounded-full {% if lst.is_our_party %}bg-[var(--brand-green-glow)] shadow-[0_0_8px_var(--brand-green-glow)]{% else %}bg-white/20{% endif %}"></div>
+                        <span class="text-sm font-medium text-white">{{ lst.name_ar|default:lst.name_fr }}</span>
+                        {% if lst.is_our_party %}<span class="text-xs bg-[var(--brand-green)]/20 text-[var(--brand-green-glow)] px-2 py-0.5 rounded-full">الحركة</span>{% endif %}
+                    </div>
+                    <input type="number" name="list_{{ lst.id }}" min="0" class="list-votes w-32 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-[var(--brand-green)] text-white text-left outline-none" value="{{ lst.current_votes|default:0 }}">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Submit -->
+        <div class="flex gap-4 pt-4">
+            <button type="submit" id="submitBtn" class="btn-primary flex-1 justify-center py-4 text-base">
+                <span>حفظ النتائج</span>
+                <i class="fa-solid fa-check"></i>
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Add Party Modal -->
+<div id="addListModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel p-6 w-full max-w-md space-y-4 border border-white/10">
+        <h3 class="text-xl font-bold text-white">إضافة قائمة / حزب جديد</h3>
+        
+        <input type="text" id="newListName" placeholder="اسم القائمة (مثال: قائمة النسور)" class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:ring-2 focus:ring-[var(--brand-green)]">
+        
+        <!-- 🛡️ SECURITY: Only show these checkboxes for National / Super Admins -->
+        {% with user_role=request.user.role_profile.role %}
+            {% if user_role == 'national' or user_role == 'super_admin' %}
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="newListIsNational" class="w-5 h-5 rounded">
+                    <label for="newListIsNational" class="text-white text-sm">قائمة وطنية / حزب رسمي (تظهر في كل الولايات)</label>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="newListIsMSP" class="w-5 h-5 rounded">
+                    <label for="newListIsMSP" class="text-white text-sm">هذه قائمة الحركة (MSP)</label>
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="flex gap-3 pt-2">
+            <button type="button" onclick="submitNewList()" class="flex-1 btn-primary py-3 justify-center">حفظ وإضافة</button>
+            <button type="button" onclick="document.getElementById('addListModal').classList.add('hidden')" class="px-4 py-3 bg-white/10 text-white rounded-xl hover:bg-white/20">إلغاء</button>
+        </div>
+        <p id="addListError" class="text-red-400 text-sm hidden text-center"></p>
+    </div>
+</div>
+
+<!-- Live JS Validation & AJAX -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('resultsForm');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        function calculate() {
+            const present = Number(document.getElementById('total_votes_cast').value) || 0;
+            const nullV = Number(document.getElementById('null_votes').value) || 0;
+            const validVotes = present - nullV;
+            
+            let listSum = 0;
+            document.querySelectorAll('.list-votes').forEach(inp => listSum += Number(inp.value) || 0);
+            
+            document.getElementById('validVotesDisplay').textContent = validVotes;
+            document.getElementById('listSumDisplay').textContent = listSum;
+            
+            const diff = validVotes - listSum;
+            const statusEl = document.getElementById('reconciliationStatus');
+            
+            if (nullV > present && present > 0) {
+                statusEl.className = 'mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm font-medium text-center';
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark me-1"></i> خطأ: الأصوات الملغاة لا يمكن أن تتجاوز عدد الحاضرين!';
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else if (diff !== 0 && present > 0) {
+                statusEl.className = 'mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm font-medium text-center';
+                statusEl.innerHTML = `<i class="fa-solid fa-circle-xmark me-1"></i> ⛔ خطأ في المجموع: الفرق هو <strong>${Math.abs(diff)}</strong> صوت. يجب أن يتساوى مجموع القوائم تماماً مع الأصوات المعبر عنها.`;
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                if (present > 0 && listSum > 0) {
+                    statusEl.className = 'mt-3 p-3 rounded-lg bg-[var(--brand-green)]/10 border border-[var(--brand-green)]/30 text-[var(--brand-green-glow)] text-sm font-medium text-center';
+                    statusEl.innerHTML = '<i class="fa-solid fa-circle-check me-1"></i>  المجموع صحيح ومطابق تماماً. يمكنك الحفظ.';
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    statusEl.className = 'hidden';
+                    statusEl.innerHTML = '';
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            }
+        }
+
+        form.addEventListener('input', calculate);
+        calculate(); 
+    });
+
+    function submitNewList() {
+        const name = document.getElementById('newListName').value.trim();
+        
+        // 🛡️ Safely read checkboxes (they might not exist in the DOM for lower-level users)
+        const isNationalEl = document.getElementById('newListIsNational');
+        const isMSPEl = document.getElementById('newListIsMSP');
+        const isNational = isNationalEl ? isNationalEl.checked : false;
+        const isMSP = isMSPEl ? isMSPEl.checked : false;
+        
+        const errorEl = document.getElementById('addListError');
+        
+        if (!name) { errorEl.textContent = 'الرجاء إدخال اسم القائمة'; errorEl.classList.remove('hidden'); return; }
+
+        const formData = new FormData();
+        formData.append('election_id', '{{ bureau.election.id }}');
+        formData.append('bureau_id', '{{ bureau.id }}'); 
+        formData.append('name', name);
+        formData.append('is_our_party', isMSP);
+        formData.append('is_national', isNational); 
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        fetch('{% url "elections:add_list_ajax" %}', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const listsContainer = document.getElementById('lists-container');
+                    const newRow = document.createElement('div');
+                    
+                    // 🎨 Apply correct base classes depending on whether it's MSP or not
+                    const baseClasses = isMSP 
+                        ? 'flex items-center justify-between p-4 rounded-xl border border-[var(--brand-green)]/30 bg-[var(--brand-green)]/5' 
+                        : 'flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5';
+                        
+                    // ✨ Add the custom flash animation class
+                    newRow.className = `${baseClasses} animate-flash-new-item`;
+                    
+                    const localBadge = !data.is_national ? '<span class="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full mr-2">قائمة محلية</span>' : '';
+                    const mspBadge = isMSP ? '<span class="text-[10px] bg-[var(--brand-green)]/20 text-[var(--brand-green-glow)] px-2 py-0.5 rounded-full">الحركة</span>' : '';
+
+                    newRow.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <div class="w-4 h-4 rounded-full ${isMSP ? 'bg-[var(--brand-green-glow)] shadow-[0_0_8px_var(--brand-green-glow)]' : 'bg-white/20'}"></div>
+                            <span class="text-sm font-medium text-white">${data.name} ${localBadge} ${mspBadge}</span>
+                        </div>
+                        <input type="number" name="list_${data.id}" min="0" value="0" class="list-votes w-32 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-[var(--brand-green)] text-white text-left outline-none">
+                    `;
+                    listsContainer.appendChild(newRow);
+                    
+                    // Reset Modal
+                    document.getElementById('addListModal').classList.add('hidden');
+                    document.getElementById('newListName').value = '';
+                    if(isMSPEl) isMSPEl.checked = false;
+                    if(isNationalEl) isNationalEl.checked = false;
+                    errorEl.classList.add('hidden');
+                    
+                    // Trigger recalculation
+                    document.getElementById('resultsForm').dispatchEvent(new Event('input'));
+                } else {
+                    errorEl.textContent = data.error;
+                    errorEl.classList.remove('hidden');
+                }
+            });
+    }
+</script>
+{% endblock %}
